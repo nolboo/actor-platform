@@ -1,5 +1,5 @@
 import React from 'react';
-import mixpanel from '../utils/mixpanel';
+import mixpanel from '../../utils/mixpanel';
 
 import MyProfileActions from '../../actions/MyProfileActions';
 //import CreateGroupActionCreators from '../../actions/CreateGroupActionCreators';
@@ -36,6 +36,7 @@ class HeaderSection extends React.Component {
   }
 
   toggleHeaderMenu() {
+    mixpanel.track('Open sidebar menu');
     this.setState({isOpened: !this.state.isOpened});
   }
 
@@ -105,6 +106,7 @@ class HeaderSection extends React.Component {
 
   openMyProfile() {
     MyProfileActions.modalOpen();
+    mixpanel.track('My profile open');
     this.setState({isOpened: false});
   }
 
