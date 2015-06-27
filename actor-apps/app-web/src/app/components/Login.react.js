@@ -1,6 +1,7 @@
 import _ from 'lodash';
 
 import React from 'react';
+import mixpanel from '../utils/mixpanel';
 
 import { AuthSteps } from '../constants/ActorAppConstants';
 
@@ -21,6 +22,10 @@ let getStateFromStores = function () {
 };
 
 class Login extends React.Component {
+  static contextTypes = {
+    router: React.PropTypes.func
+  };
+
   componentWillMount() {
     if (LoginStore.isLoggedIn()) {
       window.setTimeout(() => this.context.router.replaceWith('/'), 0);
@@ -69,6 +74,7 @@ class Login extends React.Component {
 
   onRequestSms(event) {
     event.preventDefault();
+    mixpanel.track('Request SMS');
     LoginActionCreators.requestSms(this.state.phone);
   }
 
@@ -221,9 +227,5 @@ class Login extends React.Component {
     //);
   }
 }
-
-Login.contextTypes = {
-  router: React.PropTypes.func
-};
 
 export default Login;

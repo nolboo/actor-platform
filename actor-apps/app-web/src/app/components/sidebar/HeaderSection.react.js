@@ -1,4 +1,5 @@
 import React from 'react';
+import mixpanel from '../utils/mixpanel';
 
 import MyProfileActions from '../../actions/MyProfileActions';
 //import CreateGroupActionCreators from '../../actions/CreateGroupActionCreators';
@@ -39,6 +40,7 @@ class HeaderSection extends React.Component {
   }
 
   setLogout() {
+    mixpanel.track('Log out');
     localStorage.clear();
     location.reload();
   }

@@ -28,6 +28,7 @@
     "lodash": "^3.8.0",
     "marked": "^0.3.3",
     "memoizee": "^0.3.8",
+    "mixpanel-js": "git://github.com/mixpanel/mixpanel-js.git#master",
     "normalize.css": "^3.0.3",
     "object-assign": "^2.0.0",
     "react": "0.13.3",

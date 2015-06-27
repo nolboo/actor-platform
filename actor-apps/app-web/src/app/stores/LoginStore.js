@@ -1,4 +1,5 @@
 import ActorClient from '../utils/ActorClient';
+import mixpanel from '../utils/mixpanel';
 
 import ActorAppDispatcher from '../dispatcher/ActorAppDispatcher';
 import ActorAppConstants from '../constants/ActorAppConstants';
@@ -95,6 +96,7 @@ LoginStore.dispatchToken = ActorAppDispatcher.register(function (action) {
       switch (action.error) {
         case 'PHONE_CODE_INVALID':
           errors.code = 'Invalid code';
+          mixpanel.track('Invalid code');
           break;
         case 'PHONE_CODE_EXPIRED':
           processPhoneExpired();
@@ -131,6 +133,7 @@ LoginStore.dispatchToken = ActorAppDispatcher.register(function (action) {
       break;
     case ActionTypes.SET_LOGGED_IN:
       _myUid = ActorClient.getUid();
+      mixpanel.track('Successful login');
       LoginStore.emitChange();
       break;
     default:
