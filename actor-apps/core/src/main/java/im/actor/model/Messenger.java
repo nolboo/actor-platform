@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import im.actor.model.api.AuthSession;
+import im.actor.model.api.Interest;
+import im.actor.model.api.rpc.ResponseGetAvailableInterests;
 import im.actor.model.concurrency.Command;
 import im.actor.model.crypto.CryptoUtils;
 import im.actor.model.droidkit.actors.ActorSystem;
@@ -1261,6 +1263,49 @@ public class Messenger {
     public void changeInAppNotificationVibrationEnabled(boolean val) {
         modules.getSettings().changeInAppVibrationEnabled(val);
     }
+
+    /**
+     * Save available interests
+     *
+     * @param interests response containing available interest
+     */
+    @ObjectiveCName("saveAvailableInterestsWithInterests:")
+    public void saveAvailableInterests(ResponseGetAvailableInterests interests) {
+        modules.getSettings().saveAvailableInterests(interests);
+    }
+
+    /**
+     * Load available interests
+     *
+     * @return current available interests
+     */
+    @ObjectiveCName("loadAvailableInterests")
+    public List<Interest> loadAvailableInterests() {
+        return modules.getSettings().loadAvailableInterests();
+    }
+
+    /**
+     * Change interest enabled value
+     *
+     * @param interest to change value
+     * @param val      is interest enabled
+     */
+    @ObjectiveCName("changeInterestEnabledWithInterest:WithValue:")
+    public void changeInterestEnabled(int interest, boolean val) {
+        modules.getSettings().changeInterestEnabled(interest, val);
+    }
+
+    /**
+     * Is interest enabled
+     *
+     * @param interest to check
+     * @return is interest enabled
+     */
+    @ObjectiveCName("isInterestEnabledWithInterest:")
+    public boolean isInterestEnabled(int interest) {
+        return modules.getSettings().isInterestEnabled(interest);
+    }
+
 
     //////////////////////////////////////
     //            Security

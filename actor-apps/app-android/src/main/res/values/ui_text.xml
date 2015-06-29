@@ -90,7 +90,7 @@
 
     <!-- Auth errors -->
     <string name="auth_error_empty_phone">Please, enter your phone number</string>
-    <string name="auth_error_empty_email">Please, enter your phone email</string>
+    <string name="auth_error_empty_email">Please, enter your email</string>
     <string name="auth_error_code_expired">Code is expired. Please perform validation from scratch.</string>
     au
     <string name="auth_error_code_invalid">Code is invalid. Please try again.</string>
@@ -130,6 +130,8 @@
     <string name="settings_header">Settings</string>
     <string name="settings_help">Help</string>
     <string name="settings_ask">Ask Question</string>
+    <string name="settings_interests">Interests</string>
+    <string name="settings_balance">Balance: </string>
     <string name="settings_notifications">Notifications</string>
     <string name="settings_chat">Chat Settings</string>
     <string name="settings_security">Security</string>
