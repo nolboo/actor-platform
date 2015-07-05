@@ -6,7 +6,6 @@ import java.time.{ LocalDateTime, ZoneOffset }
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.concurrent.forkjoin.ThreadLocalRandom
-import scalaz.{ -\/, \/, \/- }
 
 import akka.actor.ActorSystem
 import akka.pattern.ask
@@ -15,6 +14,8 @@ import org.joda.time.DateTime
 import slick.dbio
 import slick.dbio.Effect.Write
 import slick.dbio._
+
+import cats.data.{ XorT, Xor }
 
 import im.actor.api.rpc.DBIOResult._
 import im.actor.api.rpc._
@@ -42,27 +43,27 @@ trait AuthHelpers extends Helpers {
   val codeExpiration = authConfig.expiration
 
   //expiration of code won't work
-  protected def newUserPhoneSignUp(transaction: models.AuthPhoneTransaction, name: String, sex: Option[Sex]): Result[(Int, String) \/ User] = {
+  protected def newUserPhoneSignUp(transaction: models.AuthPhoneTransaction, name: String, sex: Option[Sex]): Result[(Int, String) Xor User] = {
     val phone = transaction.phoneNumber
     for {
       optPhone ← fromDBIO(persist.UserPhone.findByPhoneNumber(phone).headOption)
       phoneAndCode ← fromOption(AuthErrors.PhoneNumberInvalid)(normalizeWithCountry(phone))
       (_, countryCode) = phoneAndCode
       result ← optPhone match {
-        case Some(userPhone) ⇒ point(-\/((userPhone.userId, countryCode)))
+        case Some(userPhone) ⇒ point(Xor.left((userPhone.userId, countryCode)))
         case None            ⇒ newUser(name, countryCode, sex)
       }
     } yield result
   }
 
-  protected def newUserEmailSignUp(transaction: models.AuthEmailTransaction, name: String, sex: Option[Sex]): Result[(Int, String) \/ User] = {
+  protected def newUserEmailSignUp(transaction: models.AuthEmailTransaction, name: String, sex: Option[Sex]): Result[(Int, String) Xor User] = {
     val email = transaction.email
     for {
       optEmail ← fromDBIO(persist.UserEmail.find(email))
       result ← optEmail match {
-        case Some(existingEmail) ⇒ point(-\/((existingEmail.userId, "")))
+        case Some(existingEmail) ⇒ point(Xor.left((existingEmail.userId, "")))
         case None ⇒
-          val userResult: Result[(Int, String) \/ User] =
+          val userResult: Result[(Int, String) Xor User] =
             for {
               optToken ← fromDBIO(persist.OAuth2Token.findByUserId(email))
               locale ← optToken.map { token ⇒
@@ -122,19 +123,19 @@ trait AuthHelpers extends Helpers {
           for {
             _ ← fromDBIO(persist.AuthCode.deleteByTransactionHash(transactionHash))
             _ ← fromDBIO(persist.auth.AuthTransaction.delete(transactionHash))
-            _ ← fromEither[Unit](-\/(codeExpired))
+            _ ← fromEither[Unit](Xor.left(codeExpired))
           } yield ()
         case s if s.code != code ⇒
           if (s.attempts + 1 >= authConfig.attempts) {
             for {
               _ ← fromDBIO(persist.AuthCode.deleteByTransactionHash(transactionHash))
               _ ← fromDBIO(persist.auth.AuthTransaction.delete(transactionHash))
-              _ ← fromEither[Unit](-\/(codeInvalid))
+              _ ← fromEither[Unit](Xor.left(codeInvalid))
             } yield ()
           } else
             for {
               _ ← fromDBIO(persist.AuthCode.incrementAttempts(transactionHash, s.attempts))
-              _ ← fromEither[Unit](-\/(codeInvalid))
+              _ ← fromEither[Unit](Xor.left(codeInvalid))
             } yield ()
         case _ ⇒ point(())
       }
@@ -283,13 +284,13 @@ trait AuthHelpers extends Helpers {
     case _                                         ⇒ genCode()
   }
 
-  private def newUser(name: String, countryCode: String, optSex: Option[Sex]): Result[\/-[User]] = {
+  private def newUser(name: String, countryCode: String, optSex: Option[Sex]): Result[Nothing Xor User] = {
     val rng = ThreadLocalRandom.current()
     val sex = optSex.map(s ⇒ models.Sex.fromInt(s.id)).getOrElse(models.NoSex)
     for {
       validName ← fromEither(validName(name).leftMap(validationFailed("NAME_INVALID", _)))
       user = models.User(nextIntId(rng), ACLUtils.nextAccessSalt(rng), validName, countryCode, sex, models.UserState.Registered)
-    } yield \/-(user)
+    } yield Xor.right(user)
   }
 
   private def isExpired(code: AuthCode): Boolean =

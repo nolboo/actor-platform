@@ -5,6 +5,7 @@ import scala.concurrent.ExecutionContext
 import scalaz._
 
 import akka.actor._
+import cats.data.Xor
 import slick.dbio.DBIO
 
 import im.actor.api.rpc.peers._
@@ -83,8 +84,8 @@ object PeerHelpers {
     actorSystem: ActorSystem,
     ec:          ExecutionContext
   ): DBIO[RpcError \/ R] = StringUtils.validName(title) match {
-    case -\/(err)        ⇒ DBIO.successful(Error(GroupErrors.WrongGroupTitle))
-    case \/-(validTitle) ⇒ f(validTitle)
+    case Xor.Left(err)        ⇒ DBIO.successful(Error(GroupErrors.WrongGroupTitle))
+    case Xor.Right(validTitle) ⇒ f(validTitle)
   }
 
   def withUserOutPeers[R <: RpcResponse](userOutPeers: immutable.Seq[UserOutPeer])(f: ⇒ DBIO[RpcError \/ R])(

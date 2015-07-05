@@ -75,7 +75,7 @@ class ContactsServiceImpl(
         })
       } yield ResponseImportContacts((pUsers ++ eUsers).toVector, seqstate._1, seqstate._2)
 
-    db.run(action.run)
+    db.run(dbioXorToEither(action.value))
   }
 
   override def jhandleGetContacts(contactsHash: String, clientData: ClientData): Future[HandlerResult[ResponseGetContacts]] = {
@@ -179,7 +179,7 @@ class ContactsServiceImpl(
           }
         }.getOrElse(DBIO.successful(Vector.empty[User])))
       } yield ResponseSearchContacts(contactUsers)
-    db.run(action.run)
+    db.run(dbioXorToEither(action.value))
   }
 
   private def importEmails(user: models.User, optOwnEmail: Option[models.UserEmail], emails: Vector[EmailToImport])(implicit client: AuthorizedClientData): DBIO[(Seq[User], Seq[Sequence])] = {

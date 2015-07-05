@@ -1,8 +1,11 @@
 package im.actor.api
 
+import cats.data.XorT
+import cats.data.Xor
+
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.language.implicitConversions
 import scala.reflect._
-import scalaz.Scalaz._
 import scalaz._
 
 import slick.dbio.{ DBIO, DBIOAction }
@@ -68,45 +71,54 @@ package object rpc extends {
   def authorizedClient(clientData: ClientData): Result[AuthorizedClientData] =
     DBIOResult.fromOption(CommonErrors.UserNotFound)(clientData.optUserId.map(id ⇒ AuthorizedClientData(clientData.authId, clientData.sessionId, id)))
 
-  type Result[A] = EitherT[DBIO, RpcError, A]
+  type Result[A] = XorT[DBIO, RpcError, A]
 
-  object DBIOResult {
-    implicit def dbioFunctor(implicit ec: ExecutionContext) = new Functor[DBIO] {
-      def map[A, B](fa: DBIO[A])(f: A ⇒ B): DBIO[B] = fa map f
-    }
-
-    implicit def dbioMonad(implicit ec: ExecutionContext) = new Monad[DBIO] {
-      def point[A](a: ⇒ A) = DBIO.successful(a)
-
-      def bind[A, B](fa: DBIO[A])(f: (A) ⇒ DBIO[B]) = fa flatMap f
-    }
-
-    def point[A](a: A): Result[A] = EitherT[DBIO, RpcError, A](DBIO.successful(a.right))
-
-    def fromDBIO[A](fa: DBIO[A])(implicit ec: ExecutionContext): Result[A] = EitherT[DBIO, RpcError, A](fa.map(_.right))
-
-    def fromEither[A](va: RpcError \/ A): Result[A] = EitherT[DBIO, RpcError, A](DBIO.successful(va))
-
-    def fromEither[A, B](failure: B ⇒ RpcError)(va: B \/ A): Result[A] = EitherT[DBIO, RpcError, A](DBIO.successful(va.leftMap(failure)))
-
-    def fromOption[A](failure: RpcError)(oa: Option[A]): Result[A] = EitherT[DBIO, RpcError, A](DBIO.successful(oa \/> failure))
-
-    def fromDBIOOption[A](failure: RpcError)(foa: DBIO[Option[A]])(implicit ec: ExecutionContext): Result[A] =
-      EitherT[DBIO, RpcError, A](foa.map(_ \/> failure))
-
-    def fromDBIOBoolean(failure: RpcError)(foa: DBIO[Boolean])(implicit ec: ExecutionContext): Result[Unit] =
-      EitherT[DBIO, RpcError, Unit](foa.map(r ⇒ if (r) ().right else failure.left))
-
-    def fromDBIOEither[A, B](failure: B ⇒ RpcError)(fva: DBIO[B \/ A])(implicit ec: ExecutionContext): Result[A] =
-      EitherT[DBIO, RpcError, A](fva.map(_.leftMap(failure)))
-
-    def fromFuture[A](fu: Future[A])(implicit ec: ExecutionContext): Result[A] = EitherT[DBIO, RpcError, A](DBIO.from(fu.map(_.right)))
-
-    def fromFutureOption[A](failure: RpcError)(fu: Future[Option[A]])(implicit ec: ExecutionContext): Result[A] = EitherT[DBIO, RpcError, A](DBIO.from(fu.map(_ \/> failure)))
-
-    def fromBoolean[A](failure: RpcError)(oa: Boolean): Result[AnyRef] = fromOption[AnyRef](failure)(oa.option(new AnyRef))
+  def dbioXorToEither[A, B](v: DBIO[A Xor B])(implicit ec: ExecutionContext): DBIO[A \/ B] = v map {
+    case Xor.Left(l) => -\/(l)
+    case Xor.Right(r) => \/-(r)
   }
 
-  def constructResult(result: Result[RpcResult])(implicit ec: ExecutionContext): DBIO[RpcResult] =
-    result.run.map { _.fold(identity, identity) }
+  object DBIOResult {
+    implicit def dbioFunctor(implicit ec: ExecutionContext): cats.Functor[DBIO] = new cats.Functor[DBIO] {
+      def map[A, B](fa: DBIO[A])(f: (A) => B) = fa map f
+    }
+    implicit def dbioMonad(implicit ec: ExecutionContext): cats.Monad[DBIO] = new cats.Monad[DBIO] {
+      def pure[A](x: A) = DBIO.successful(x)
+      def flatMap[A, B](fa: DBIO[A])(f: (A) => DBIO[B]) = fa flatMap f
+    }
+
+    implicit class Opt2Xor[A](val self: Option[A]) {
+      def toXor[B](failure: B): B Xor A = self map Xor.right getOrElse Xor.left(failure)
+    }
+
+    implicit class Boolean2Xor(val self: Boolean) {
+      def toXor[A](failure:A): A Xor Unit = if (self) Xor.right(()) else Xor.left(failure)
+    }
+
+    def point[A](a: A): Result[A] = XorT[DBIO, RpcError, A](DBIO.successful(Xor.right(a)))
+
+    def fromDBIO[A](fa: DBIO[A])(implicit ec: ExecutionContext): Result[A] = XorT[DBIO, RpcError, A](fa map Xor.right)
+
+    def fromEither[A](va: RpcError Xor A): Result[A] = XorT[DBIO, RpcError, A](DBIO.successful(va))
+
+    def fromEither[A, B](failure: B ⇒ RpcError)(va: B Xor A): Result[A] = XorT[DBIO, RpcError, A](DBIO.successful(va leftMap failure))
+
+    def fromOption[A](failure: RpcError)(oa: Option[A]): Result[A] = XorT[DBIO, RpcError, A](DBIO.successful(oa.toXor(failure)))
+
+    def fromDBIOOption[A](failure: RpcError)(foa: DBIO[Option[A]])(implicit ec: ExecutionContext): Result[A] =
+      XorT[DBIO, RpcError, A](foa map(_.toXor(failure)))
+
+    def fromDBIOBoolean(failure: RpcError)(foa: DBIO[Boolean])(implicit ec: ExecutionContext): Result[Unit] =
+      XorT[DBIO, RpcError, Unit](foa map(_.toXor(failure)))
+
+    def fromDBIOEither[A, B](failure: B ⇒ RpcError)(fva: DBIO[B Xor A])(implicit ec: ExecutionContext): Result[A] =
+      XorT[DBIO, RpcError, A](fva map(_.leftMap(failure)))
+
+    def fromFuture[A](fu: Future[A])(implicit ec: ExecutionContext): Result[A] = XorT[DBIO, RpcError, A](DBIO.from(fu map Xor.right))
+
+    def fromFutureOption[A](failure: RpcError)(fu: Future[Option[A]])(implicit ec: ExecutionContext): Result[A] = XorT[DBIO, RpcError, A](DBIO.from(fu map(_.toXor(failure))))
+
+    def fromBoolean(failure: RpcError)(oa: Boolean): Result[Unit] = XorT[DBIO, RpcError, Unit](DBIO.successful(oa.toXor(failure)))
+  }
+
 }

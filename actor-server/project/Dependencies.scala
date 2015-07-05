@@ -9,6 +9,8 @@ object Dependencies {
     val scalaz = "7.1.1"
     val slick = "3.0.0"
     val scalatest = "2.2.4"
+//    val algebraVersion = "0.2.0-SNAPSHOT"
+    val catsVersion    = "0.1.0-SNAPSHOT"
   }
 
   object Compile {
@@ -26,6 +28,12 @@ object Dependencies {
 
     val caffeine                = "com.github.ben-manes.caffeine" %  "caffeine"                      % "1.2.0"
     val eaioUuid                = "com.eaio.uuid"                 %  "uuid"                          % "3.4"
+
+//    val algebra                 = "org.spire-math"                %% "algebra"                       % V.algebraVersion
+//    val algebraStd              = "org.spire-math"                %% "algebra-std"                   % V.algebraVersion
+
+    val cats                    = "org.spire-math"                %% "cats-core"                     % V.catsVersion
+    val catsStd                 = "org.spire-math"                %% "cats-std"                      % V.catsVersion
 
     val configs                 = "com.github.kxbmap"             %% "configs"                       % "0.2.4"
 
@@ -109,7 +117,7 @@ object Dependencies {
   val enrich = shared ++ Seq(akkaActor, akkaHttp)
 
   val rpcApi = shared ++ Seq(
-    akkaSlf4j, akkaActor, amazonaws, awsWrap, bcprov, apacheCommonsIo, shapeless
+    akkaSlf4j, akkaActor, amazonaws, awsWrap, bcprov, apacheCommonsIo, shapeless, cats, catsStd
   )
 
   val httpApi = shared ++ Seq(akkaActor, jodaTime, akkaHttp, playJson)
@@ -156,7 +164,7 @@ object Dependencies {
 
   val notifications = shared ++ Seq(akkaContrib, slick)
 
-  val utils = shared ++ Seq(akkaActor, akkaHttp, amazonaws, awsWrap, libPhoneNumber, scrImageCore, slick)
+  val utils = shared ++ Seq(akkaActor, akkaHttp, amazonaws, awsWrap, libPhoneNumber, scrImageCore, slick, cats, catsStd)
 
   val utilsCache = shared :+ caffeine
 

@@ -11,6 +11,7 @@ import org.joda.time.DateTime
 import shapeless._
 import slick.dbio.DBIO
 import slick.driver.PostgresDriver.api._
+import cats.data.Xor
 
 import im.actor.api.rpc.DBIOResult._
 import im.actor.api.rpc._
@@ -143,7 +144,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
         _ ← fromDBIO(persist.auth.AuthTransaction.delete(transactionHash))
         ack ← fromFuture(authorizeSession(user.id, clientData))
       } yield ResponseAuth(userStruct, misc.Config(maxGroupSize))
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   def jhandleGetOAuth2Params(transactionHash: String, redirectUrl: String, clientData: ClientData): Future[HandlerResult[ResponseGetOAuth2Params]] = {
@@ -153,7 +154,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
         url ← fromOption(AuthErrors.RedirectUrlInvalid)(oauth2Service.getAuthUrl(redirectUrl, transaction.email))
         _ ← fromDBIO(persist.auth.AuthEmailTransaction.updateRedirectUri(transaction.transactionHash, redirectUrl))
       } yield ResponseGetOAuth2Params(url)
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   def jhandleStartPhoneAuth(phoneNumber: Long, appId: Int, apiKey: String, deviceHash: Array[Byte], deviceTitle: String, clientData: ClientData): Future[HandlerResult[ResponseStartPhoneAuth]] = {
@@ -175,7 +176,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
       }
       isRegistered ← fromDBIO(persist.UserPhone.exists(normalizedPhone))
     } yield ResponseStartPhoneAuth(transactionHash, isRegistered)
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   def jhandleSignUp(transactionHash: String, name: String, sex: Option[Sex], clientData: ClientData): Future[HandlerResult[ResponseAuth]] = {
@@ -194,8 +195,8 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
 
         //fallback to sign up if user exists
         user ← signInORsignUp match {
-          case -\/((userId, countryCode)) ⇒ authorizeT(userId, countryCode, clientData)
-          case \/-(user)                  ⇒ handleUserCreate(user, transaction, clientData.authId)
+          case Xor.Left((userId, countryCode)) ⇒ authorizeT(userId, countryCode, clientData)
+          case Xor.Right(user)                 ⇒ handleUserCreate(user, transaction, clientData.authId)
         }
         userStruct ← fromDBIO(userStruct(user, None, clientData.authId))
 
@@ -216,7 +217,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
         _ ← fromDBIO(refreshAuthSession(user.id, transaction.deviceHash, authSession))
         ack ← fromFuture(authorizeSession(user.id, clientData))
       } yield ResponseAuth(userStruct, misc.Config(maxGroupSize))
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   def jhandleStartEmailAuth(email: String, appId: Int, apiKey: String, deviceHash: Array[Byte], deviceTitle: String, clientData: ClientData): Future[HandlerResult[ResponseStartEmailAuth]] = {
@@ -246,7 +247,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
           }
       }
     } yield ResponseStartEmailAuth(transactionHash, isRegistered, activationType)
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   //TODO: add email code validation
@@ -282,7 +283,7 @@ class AuthServiceImpl(val activationContext: ActivationContext, mediator: ActorR
         _ ← fromDBIO(refreshAuthSession(user.id, transaction.deviceHash, authSession))
         ack ← fromFuture(authorizeSession(user.id, clientData))
       } yield ResponseAuth(userStruct, misc.Config(maxGroupSize))
-    db.run(action.run.transactionally)
+    db.run(dbioXorToEither(action.value).transactionally)
   }
 
   override def jhandleSignOut(clientData: ClientData): Future[HandlerResult[ResponseVoid]] = {

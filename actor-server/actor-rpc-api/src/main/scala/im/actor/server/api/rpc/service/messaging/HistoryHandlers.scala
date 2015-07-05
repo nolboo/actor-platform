@@ -86,7 +86,7 @@ trait HistoryHandlers {
       } yield ResponseSeq(seqstate._1, seqstate._2)
     }
 
-    db.run(toDBIOAction(action map (_.run)))
+    db.run(toDBIOAction(action map (a ⇒ dbioXorToEither(a.value))))
   }
 
   override def jhandleDeleteChat(peer: OutPeer, clientData: ClientData): Future[HandlerResult[ResponseSeq]] = {
