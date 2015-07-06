@@ -12,6 +12,7 @@ import im.actor.model.http.FileDownloadCallback;
 import im.actor.model.http.FileUploadCallback;
 import im.actor.model.js.providers.http.JsHttpRequest;
 import im.actor.model.js.providers.http.JsHttpRequestHandler;
+import im.actor.model.log.Log;
 
 public class JsHttpProvider implements HttpProvider {
 
@@ -22,6 +23,7 @@ public class JsHttpProvider implements HttpProvider {
 
     @Override
     public void putMethod(String url, byte[] contents, final FileUploadCallback callback) {
+        Log.d("Upload", "Uploading " + contents.length + " bytes to " + url);
         JsHttpRequest request = JsHttpRequest.create();
         request.open("PUT", url);
         request.setRequestHeader("Content-Type", "application/octet-stream");
@@ -33,6 +35,7 @@ public class JsHttpProvider implements HttpProvider {
 
                         callback.onUploaded();
                     } else {
+                        Log.e("Upload", new Exception("Upload error"));
                         callback.onUploadFailure();
                     }
                 }
