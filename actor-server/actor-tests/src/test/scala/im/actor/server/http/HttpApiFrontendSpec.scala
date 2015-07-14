@@ -4,20 +4,22 @@ import java.nio.file.Paths
 
 import scala.concurrent.forkjoin.ThreadLocalRandom
 
-import akka.http.scaladsl.model.HttpMethods.GET
-import akka.http.scaladsl.model.StatusCodes.{ OK, BadRequest, NotFound }
-import akka.stream.scaladsl.Sink
-import org.scalatest.Inside._
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes }
+import akka.http.scaladsl.model.ContentTypes.`application/json`
+import akka.http.scaladsl.model.HttpMethods.{ GET, POST }
+import akka.http.scaladsl.model.StatusCodes.{ BadRequest, NotFound, OK }
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.stream.scaladsl.Sink
 import akka.util.ByteString
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider
-import com.amazonaws.services.s3.transfer.TransferManager
-import com.github.dwhjames.awswrap.s3.AmazonS3ScalaClient
+import de.heikoseeberger.akkahttpplayjson._
+import org.scalatest.Inside._
 import play.api.libs.json._
 
 import im.actor.api.rpc.ClientData
-import im.actor.server.api.http.json.{ JsonImplicits, AvatarUrls }
+import im.actor.server.api.http.dashboard.CreatedUser
+import im.actor.server.api.http.json.{ AvatarUrls, JsonImplicits }
 import im.actor.server.api.http.{ HttpApiConfig, HttpApiFrontend }
 import im.actor.server.api.rpc.service.groups.{ GroupInviteConfig, GroupsServiceImpl }
 import im.actor.server.api.rpc.service.{ GroupsServiceHelpers, messaging }
@@ -25,8 +27,8 @@ import im.actor.server.oauth.{ GoogleProvider, OAuth2GoogleConfig }
 import im.actor.server.peermanagers.{ GroupPeerManager, PrivatePeerManager }
 import im.actor.server.presences.{ GroupPresenceManager, PresenceManager }
 import im.actor.server.social.SocialManager
-import im.actor.server.util.{ ImageUtils, FileUtils, ACLUtils }
-import im.actor.server.{ ImplicitFileStorageAdapter, BaseAppSuite, models, persist }
+import im.actor.server.util.{ ACLUtils, ImageUtils }
+import im.actor.server.{ BaseAppSuite, ImplicitFileStorageAdapter, models, persist }
 
 class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with ImplicitFileStorageAdapter {
   behavior of "HttpApiFrontend"
@@ -52,6 +54,8 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
   it should "not allow path traversal" in t.pathTraversal()
 
   it should "serve correct file path" in t.filesCorrect()
+
+  "Dashboard handler" should "make crud operations on users" in t.userMixed()
 
   implicit val sessionRegion = buildSessionRegionProxy()
   implicit val seqUpdManagerRegion = buildSeqUpdManagerRegion()
@@ -93,7 +97,7 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
         bot shouldBe defined
         val botToken = bot.get.token
         val request = HttpRequest(
-          method = HttpMethods.POST,
+          method = POST,
           uri = s"${config.scheme}://${config.host}:${config.port}/v1/webhooks/$botToken",
           entity = """{"text":"Good morning everyone!"}"""
         )
@@ -108,7 +112,7 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
         bot shouldBe defined
         val botToken = bot.get.token
         val request = HttpRequest(
-          method = HttpMethods.POST,
+          method = POST,
           uri = s"${config.scheme}://${config.host}:${config.port}/v1/webhooks/$botToken",
           entity = """{"document_url":"http://www.scala-lang.org/docu/files/ScalaReference.pdf"}"""
         )
@@ -123,7 +127,7 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
         bot shouldBe defined
         val botToken = bot.get.token
         val request = HttpRequest(
-          method = HttpMethods.POST,
+          method = POST,
           uri = s"${config.scheme}://${config.host}:${config.port}/v1/webhooks/$botToken",
           entity = """{"image_url":"http://www.scala-lang.org/resources/img/smooth-spiral.png"}"""
         )
@@ -138,7 +142,7 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
         bot shouldBe defined
         val botToken = bot.get.token
         val request = HttpRequest(
-          method = HttpMethods.POST,
+          method = POST,
           uri = s"${config.scheme}://${config.host}:${config.port}/v1/webhooks/$botToken",
           entity = """{"WRONG":"Should not be parsed"}"""
         )
@@ -305,6 +309,47 @@ class HttpApiFrontendSpec extends BaseAppSuite with GroupsServiceHelpers with Im
       whenReady(http.singleRequest(r4)) { resp ⇒
         resp.status shouldEqual OK
         resp.entity.dataBytes.runWith(Sink.ignore)
+      }
+    }
+
+    import PlayJsonSupport._
+    implicit val createdUserReads = Json.reads[CreatedUser]
+    val baseUserCreationRequest = HttpRequest(POST, s"http://${config.interface}:${config.port}/dashboard/users")
+    def baseUserGetRequest(userId: Int) = HttpRequest(GET, s"http://${config.interface}:${config.port}/dashboard/users/$userId")
+
+    def userMixed() = {
+      val p1 = fairy.person()
+      val r1 = baseUserCreationRequest.withEntity(
+        `application/json`,
+        s"""{"userName": "${p1.fullName()}", "phone": ${buildPhone()}, "email": "${p1.email()}"}"""
+      )
+      val u1 = whenReady(http.singleRequest(r1)) { resp ⇒
+        resp.status shouldEqual StatusCodes.Created
+        whenReady(Unmarshal(resp.entity).to[CreatedUser])(_.id)
+      }
+//      whenReady(http.singleRequest(baseUserGetRequest(u1))) { resp ⇒
+//        resp.status shouldEqual StatusCodes.OK
+//        whenReady(Unmarshal(resp.entity).to[JsValue])
+//      }
+
+      val p2 = fairy.person()
+      val r2 = baseUserCreationRequest.withEntity(
+        `application/json`,
+        s"""{"userName": "${p2.fullName()}", "phone": ${buildPhone()}}"""
+      )
+      val u2 = whenReady(http.singleRequest(r2)) { resp ⇒
+        resp.status shouldEqual StatusCodes.Created
+        whenReady(Unmarshal(resp.entity).to[CreatedUser])(_.id)
+      }
+
+      val p3 = fairy.person()
+      val r3 = baseUserCreationRequest.withEntity(
+        `application/json`,
+        s"""{"userName": "${p3.fullName()}", "email": "${p3.email()}"}"""
+      )
+      val u3 = whenReady(http.singleRequest(r3)) { resp ⇒
+        resp.status shouldEqual StatusCodes.Created
+        whenReady(Unmarshal(resp.entity).to[CreatedUser])(_.id)
       }
     }
   }

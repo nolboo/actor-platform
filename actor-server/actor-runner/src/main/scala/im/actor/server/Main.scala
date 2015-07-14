@@ -91,11 +91,12 @@ class Main extends Bootable with DbInit with FlywayInit {
 
     val mediator = DistributedPubSubExtension(system).mediator
 
+    implicit val emailSender = new EmailSender(emailConfig)
     val activationContext = serverConfig.getString("services.activation.default-service") match {
       case "internal" ⇒ InternalCodeActivation.newContext(
         activationConfig,
         new TelesignSmsEngine(serverConfig.getConfig("services.telesign")),
-        new EmailSender(emailConfig)
+        emailSender
       )
       case "actor-activation" ⇒ new GateCodeActivation(gateConfig)
       case _                  ⇒ throw new Exception("""Invalid activation.default-service value provided: valid options: "internal", actor-activation""")
